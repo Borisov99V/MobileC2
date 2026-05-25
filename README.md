@@ -51,15 +51,25 @@ Give the script execute permission first (only needed once):
 chmod +x build_apk.sh
 ```
 
-Then build with your server IP:
+Then build with your server IP and Android SDK path:
 ```bash
-./build_apk.sh <SERVER_IP>
+./build_apk.sh  
 ```
 
 Example:
 ```bash
-./build_apk.sh 192.168.1.100
+./build_apk.sh 192.168.1.100 /home/user/Android/Sdk
 ```
+
+### Finding your SDK path
+
+**Linux / Mac:** Usually located at `~/Android/Sdk`
+
+**Windows:** Usually located at `C:\Users\<user>\AppData\Local\Android\Sdk`
+
+### Installing Android SDK (if not already installed)
+
+Download and install [Android Studio](https://developer.android.com/studio) — the SDK is included automatically. After installation the SDK will be at the default path above.
 
 ---
 
