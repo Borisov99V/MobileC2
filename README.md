@@ -53,7 +53,7 @@ chmod +x build_apk.sh
 
 Then build with your server IP and Android SDK path:
 ```bash
-./build_apk.sh  
+./build_apk.sh  <SERVER_IP> <SDK_PATH>
 ```
 
 Example:
