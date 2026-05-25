@@ -1,0 +1,28 @@
+# ── Android build outputs ──────────────────────────────────────────────────
+agent-android/app/build/
+agent-android/build/
+agent-android/.gradle/
+agent-android/.idea/
+agent-android/*.iml
+agent-android/app/*.iml
+agent-android/local.properties
+
+# ── Generated APKs ─────────────────────────────────────────────────────────
+*.apk
+
+# ── Server runtime files ───────────────────────────────────────────────────
+agents.json
+commands.json
+results_*.json
+exfil/
+
+# ── Python ─────────────────────────────────────────────────────────────────
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# ── OS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db

